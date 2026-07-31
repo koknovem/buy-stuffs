@@ -172,6 +172,11 @@ tripsRouter.post('/:id/dishes', requireAuth, async (req: AuthedRequest, res, nex
       }))
       .filter((i: { name: string }) => i.name);
 
+    if (ingredients.length === 0) {
+      res.status(400).json({ error: 'at least one ingredient required' });
+      return;
+    }
+
     const dish = newDish(name, icon, req.user!.id, ingredients);
     const updated = await updateTrip(trip.id, (t) => {
       t.dishes.push(dish);

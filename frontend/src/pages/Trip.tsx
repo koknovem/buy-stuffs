@@ -7,12 +7,6 @@ import { Avatar } from '../Avatar';
 import { useTripPolling } from '../useTripPolling';
 import type { Ingredient, Trip } from '../types';
 
-function flatIngredients(trip: Trip) {
-  return trip.dishes.flatMap((d) =>
-    d.ingredients.map((ing) => ({ ...ing, dishName: d.name, dishIcon: d.icon })),
-  );
-}
-
 export function TripPage() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -61,26 +55,38 @@ export function TripPage() {
     }
   };
 
-  if (loading && !trip) return <div className="app-shell"><div className="spinner" /></div>;
+  if (loading && !trip) {
+    return (
+      <div className="app-shell">
+        <div className="spinner" />
+      </div>
+    );
+  }
   if (!trip) {
     return (
       <div className="app-shell">
         <p className="error">{error || 'Not found'}</p>
-        <button className="action-btn" onClick={() => navigate('/')}>🏠</button>
+        <button className="action-btn" onClick={() => navigate('/')}>
+          🏠
+        </button>
       </div>
     );
   }
 
-  const items = flatIngredients(trip);
+  const totalIngredients = trip.dishes.reduce((n, d) => n + d.ingredients.length, 0);
 
   return (
     <div className="app-shell">
       <div className="topbar">
-        <button className="icon-btn" onClick={() => navigate('/')}>←</button>
+        <button className="icon-btn" onClick={() => navigate('/')}>
+          ←
+        </button>
         <button className="chip-code" onClick={() => setShowQr((v) => !v)}>
           {trip.code}
         </button>
-        <Link className="icon-btn" to={`/trip/${trip.id}/add`}>＋</Link>
+        <Link className="icon-btn" to={`/trip/${trip.id}/add`}>
+          ＋
+        </Link>
       </div>
 
       <div className="member-strip">
@@ -95,65 +101,87 @@ export function TripPage() {
         </div>
       )}
 
-      <ul className="shop-list">
-        {items.map((ing) => {
-          const claimer = ing.claimedBy ? trip.userMap[ing.claimedBy] : null;
-          return (
-            <li key={ing.id}>
-              <button
-                type="button"
-                className={`shop-item ${ing.status}`}
-                onClick={() => void onTap(ing)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  void release(ing);
-                }}
-              >
-                <span className="ing-icon">{ing.icon}</span>
-                <div className="ing-meta">
-                  <div className="ing-name">{ing.name}</div>
-                  <div className="ing-dish">
-                    {ing.dishIcon} {ing.dishName}
-                  </div>
-                </div>
-                {ing.status === 'bought' ? (
-                  <span style={{ fontSize: '1.4rem' }}>✔️</span>
-                ) : claimer ? (
-                  <span className="row" style={{ gap: '0.35rem' }}>
-                    {ing.claimedBy === user?.id && ing.status === 'claimed' && (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        title="release"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void release(ing);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.stopPropagation();
-                            void release(ing);
-                          }
-                        }}
-                        style={{ fontSize: '1.1rem' }}
-                      >
-                        ↩️
-                      </span>
-                    )}
-                    <Avatar user={claimer} size="sm" />
-                  </span>
-                ) : (
-                  <span style={{ width: 28 }} />
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-
-      {items.length === 0 && (
+      {trip.dishes.length === 0 && (
         <p className="muted" style={{ textAlign: 'center' }}>
           ＋ add a dish
+        </p>
+      )}
+
+      <div className="stack">
+        {trip.dishes.map((dish) => (
+          <section key={dish.id} className="dish-block">
+            <div className="dish-head">
+              <span className="dish-head-icon">{dish.icon}</span>
+              <strong className="dish-head-name">{dish.name}</strong>
+              {dish.ingredients.length === 0 && (
+                <span className="muted" style={{ fontSize: '0.85rem' }}>
+                  ✨
+                </span>
+              )}
+            </div>
+            {dish.ingredients.length === 0 ? (
+              <p className="muted empty-ings">no items — use ✨ then ✅</p>
+            ) : (
+              <ul className="shop-list">
+                {dish.ingredients.map((ing) => {
+                  const claimer = ing.claimedBy ? trip.userMap[ing.claimedBy] : null;
+                  return (
+                    <li key={ing.id}>
+                      <button
+                        type="button"
+                        className={`shop-item ${ing.status}`}
+                        onClick={() => void onTap(ing)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          void release(ing);
+                        }}
+                      >
+                        <span className="ing-icon">{ing.icon}</span>
+                        <div className="ing-meta">
+                          <div className="ing-name">{ing.name}</div>
+                        </div>
+                        {ing.status === 'bought' ? (
+                          <span style={{ fontSize: '1.4rem' }}>✔️</span>
+                        ) : claimer ? (
+                          <span className="row" style={{ gap: '0.35rem' }}>
+                            {ing.claimedBy === user?.id && ing.status === 'claimed' && (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                title="release"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void release(ing);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.stopPropagation();
+                                    void release(ing);
+                                  }
+                                }}
+                                style={{ fontSize: '1.1rem' }}
+                              >
+                                ↩️
+                              </span>
+                            )}
+                            <Avatar user={claimer} size="sm" />
+                          </span>
+                        ) : (
+                          <span style={{ width: 28 }} />
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        ))}
+      </div>
+
+      {trip.dishes.length > 0 && totalIngredients === 0 && (
+        <p className="muted" style={{ textAlign: 'center', fontSize: '0.9rem' }}>
+          tap ✨ on add dish to fill the buy list
         </p>
       )}
 

@@ -35,6 +35,10 @@ export function AddDishPage() {
 
   const save = async () => {
     if (!id || !name.trim()) return;
+    if (ingredients.length === 0) {
+      setError('add items (✨ or ＋) before save');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -132,7 +136,7 @@ export function AddDishPage() {
 
       <button
         className="action-btn primary wide"
-        disabled={busy || !name.trim()}
+        disabled={busy || !name.trim() || ingredients.length === 0}
         onClick={() => void save()}
       >
         ✅
