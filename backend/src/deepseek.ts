@@ -13,20 +13,21 @@ export interface GeneratedDishDraft {
 const cache = new Map<string, { at: number; value: GeneratedDishDraft }>();
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
-const SYSTEM_PROMPT = `You are a grocery shopping assistant for friends buying dinner ingredients.
-Given a dish name, reply with ONLY valid JSON (no markdown fences):
-{"icon":"🍜","ingredients":[{"name":"eggs","icon":"🥚"}]}
-Rules:
-- Prefer common store-bought items people need to buy
-- Skip pantry staples (salt, pepper, oil, water) unless essential to the dish identity
-- Short ingredient names (1-3 words)
-- One emoji icon per ingredient and one for the dish
-- Assume servings for 2-4 people
-- At most 20 ingredients
-- Language: match the dish name language (Chinese dish → Chinese ingredient names)`;
+const SYSTEM_PROMPT = `你係香港朋友夾份買餸助手。根據菜式名稱，只回覆有效 JSON（唔好用 markdown code fence）：
+{"icon":"🍜","ingredients":[{"name":"雞蛋","icon":"🥚"}]}
+規則：
+- 所有文字必須用繁體中文（香港用語 / zh-HK），例如用「餸」「豉油」「椰漿」，唔好用簡體，亦唔好用英文名
+- 即使菜式名係日文、英文或其他語言，食材名稱都要翻譯成香港繁體中文
+- 優先列出超市／街市常見要買嘅食材
+- 跳過常備調味（鹽、胡椒、油、水），除非對呢道菜好關鍵
+- 食材名要短（約 2–8 字）
+- 每樣食材同菜式各一個 emoji
+- 分量約 2–4 人
+- 最多 20 樣食材
+- JSON 嘅 name 欄位只用繁體中文，icon 用 emoji`;
 
 function normalizeKey(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+  return `zh-HK:${name.trim().toLowerCase().replace(/\s+/g, ' ')}`;
 }
 
 function sanitizeDraft(raw: unknown): GeneratedDishDraft {
@@ -70,7 +71,7 @@ async function callDeepSeek(dishName: string): Promise<GeneratedDishDraft> {
     temperature: 0.4,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: `Dish: ${dishName.trim().slice(0, 120)}` },
+      { role: 'user', content: `菜式：${dishName.trim().slice(0, 120)}\n請用香港繁體中文列出要買嘅食材 JSON。` },
     ],
   };
 
