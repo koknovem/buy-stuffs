@@ -144,8 +144,9 @@ tripsRouter.post('/:id/dishes/generate', requireAuth, async (req: AuthedRequest,
       const draft = await generateBuyList(name);
       res.json({ draft });
     } catch (err) {
-      console.error('DeepSeek generate failed', err);
-      res.status(502).json({ error: 'Could not generate buy list' });
+      const reason = err instanceof Error ? err.message : String(err);
+      console.error('DeepSeek generate failed', reason);
+      res.status(502).json({ error: 'Could not generate buy list', reason });
     }
   } catch (err) {
     next(err);
@@ -183,12 +184,19 @@ tripsRouter.post('/:id/dishes', requireAuth, async (req: AuthedRequest, res, nex
         if (draft.icon) icon = draft.icon;
         ingredients = draft.ingredients;
       } catch (err) {
-        console.error('DeepSeek auto-generate on create failed', err);
-        res.status(502).json({ error: 'Could not generate buy list' });
+        const reason = err instanceof Error ? err.message : String(err);
+        console.error('DeepSeek auto-generate on create failed', reason);
+        res.status(502).json({
+          error: 'Could not generate buy list',
+          reason,
+        });
         return;
       }
       if (ingredients.length === 0) {
-        res.status(502).json({ error: 'Could not generate buy list' });
+        res.status(502).json({
+          error: 'Could not generate buy list',
+          reason: 'Empty model response',
+        });
         return;
       }
     }
@@ -228,8 +236,9 @@ tripsRouter.post('/:id/dishes/:dishId/fill', requireAuth, async (req: AuthedRequ
     try {
       draft = await generateBuyList(dish.name);
     } catch (err) {
-      console.error('DeepSeek fill failed', err);
-      res.status(502).json({ error: 'Could not generate buy list' });
+      const reason = err instanceof Error ? err.message : String(err);
+      console.error('DeepSeek fill failed', reason);
+      res.status(502).json({ error: 'Could not generate buy list', reason });
       return;
     }
     if (!draft.ingredients.length) {

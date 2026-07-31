@@ -85,6 +85,9 @@ async function main() {
 
   app.listen(config.port, () => {
     console.log(`buy-stuffs api on :${config.port}`);
+    console.log(
+      `DeepSeek: ${config.deepseekApiKey ? 'key configured' : 'DEEPSEEK_API_KEY missing'} (model=${config.deepseekModel})`,
+    );
   });
 }
 

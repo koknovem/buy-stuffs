@@ -20,8 +20,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     let message = res.statusText;
     try {
-      const body = (await res.json()) as { error?: string };
-      if (body.error) message = body.error;
+      const body = (await res.json()) as { error?: string; reason?: string };
+      if (body.error) message = body.reason ? `${body.error}: ${body.reason}` : body.error;
     } catch {
       /* ignore */
     }
