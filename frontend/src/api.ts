@@ -231,6 +231,11 @@ export const api = {
       body: JSON.stringify(payload),
       retries: 1,
     }),
+  deleteDish: (tripId: string, dishId: string) =>
+    request<{ trip: import('./types').Trip }>(`/api/trips/${tripId}/dishes/${dishId}`, {
+      method: 'DELETE',
+      retries: 1,
+    }),
   addIngredient: (
     tripId: string,
     dishId: string,

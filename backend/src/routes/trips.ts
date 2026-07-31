@@ -315,6 +315,30 @@ tripsRouter.patch('/:id/dishes/:dishId', requireAuth, async (req: AuthedRequest,
   }
 });
 
+tripsRouter.delete('/:id/dishes/:dishId', requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const trip = await readTrip(req.params.id);
+    if (!requireMember(trip, req.user!.id)) {
+      res.status(404).json({ error: 'Trip not found' });
+      return;
+    }
+    let removed = false;
+    const updated = await updateTrip(trip.id, (t) => {
+      const before = t.dishes.length;
+      t.dishes = t.dishes.filter((d) => d.id !== req.params.dishId);
+      removed = t.dishes.length < before;
+      return t;
+    });
+    if (!removed) {
+      res.status(404).json({ error: 'Dish not found' });
+      return;
+    }
+    res.json({ trip: await enrichTrip(updated!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 tripsRouter.post('/:id/dishes/:dishId/ingredients', requireAuth, async (req: AuthedRequest, res, next) => {
   try {
     const trip = await readTrip(req.params.id);

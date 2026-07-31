@@ -223,6 +223,24 @@ export function TripPage() {
     }
   };
 
+  const deleteDish = async (dishId: string) => {
+    if (!id) return;
+    if (!online) {
+      setActionError('You’re offline. Try again when connected.');
+      return;
+    }
+    setEditBusy(true);
+    setActionError(null);
+    try {
+      const { trip: next } = await api.deleteDish(id, dishId);
+      setTrip(next);
+      setEditDishId(null);
+    } catch (err) {
+      setActionError(friendlyError(err));
+    } finally {
+      setEditBusy(false);
+    }
+  };
   const addIngToDish = async (dishId: string) => {
     if (!id || !newIngName.trim()) return;
     if (!online) {
@@ -424,14 +442,25 @@ export function TripPage() {
                   onChange={(e) => setDishNameDraft(e.target.value)}
                   placeholder="dish name"
                 />
-                <button
-                  type="button"
-                  className="action-btn primary wide"
-                  disabled={editBusy || !dishNameDraft.trim()}
-                  onClick={() => void saveDishName(dish.id)}
-                >
-                  ✅
-                </button>
+                <div className="row">
+                  <button
+                    type="button"
+                    className="action-btn primary wide"
+                    disabled={editBusy || !dishNameDraft.trim()}
+                    onClick={() => void saveDishName(dish.id)}
+                  >
+                    ✅
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title="delete dish"
+                    disabled={editBusy}
+                    onClick={() => void deleteDish(dish.id)}
+                  >
+                    🗑️
+                  </button>
+                </div>
                 <div className="row">
                   <button
                     type="button"
