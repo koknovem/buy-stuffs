@@ -35,13 +35,10 @@ export function AddDishPage() {
 
   const save = async () => {
     if (!id || !name.trim()) return;
-    if (ingredients.length === 0) {
-      setError('add items (✨ or ＋) before save');
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
+      // Empty ingredients → server calls DeepSeek and fills the buy list
       await api.addDish(id, { name: name.trim(), icon, ingredients });
       navigate(`/trip/${id}`, { replace: true });
     } catch (err) {
@@ -61,11 +58,13 @@ export function AddDishPage() {
   return (
     <div className="app-shell">
       <div className="topbar">
-        <button className="icon-btn" onClick={() => navigate(-1)}>←</button>
+        <button className="icon-btn" onClick={() => navigate(-1)}>
+          ←
+        </button>
         <span style={{ fontSize: '1.6rem' }}>{icon}</span>
         <button
           className="icon-btn"
-          disabled={genBusy || !name.trim()}
+          disabled={genBusy || busy || !name.trim()}
           onClick={() => void generate()}
           title="generate"
         >
@@ -108,6 +107,12 @@ export function AddDishPage() {
         ))}
       </div>
 
+      {ingredients.length === 0 && name.trim() && (
+        <p className="muted" style={{ textAlign: 'center', fontSize: '0.9rem' }}>
+          ✅ will ✨ fill the buy list
+        </p>
+      )}
+
       <div className="row">
         <button
           type="button"
@@ -136,10 +141,10 @@ export function AddDishPage() {
 
       <button
         className="action-btn primary wide"
-        disabled={busy || !name.trim() || ingredients.length === 0}
+        disabled={busy || genBusy || !name.trim()}
         onClick={() => void save()}
       >
-        ✅
+        {busy && ingredients.length === 0 ? '✨' : '✅'}
       </button>
 
       {error && <p className="error">{error}</p>}

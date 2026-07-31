@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { api, ApiError } from '../api';
@@ -15,11 +15,49 @@ export function TripPage() {
   const [qr, setQr] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [filling, setFilling] = useState<Record<string, boolean>>({});
+  const fillAttempted = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!trip?.joinUrl) return;
     void QRCode.toDataURL(trip.joinUrl, { width: 220, margin: 1 }).then(setQr);
   }, [trip?.joinUrl]);
+
+  // Auto-fill dishes that have no ingredients via DeepSeek
+  useEffect(() => {
+    if (!trip || !id) return;
+    const empty = trip.dishes.filter(
+      (d) => d.ingredients.length === 0 && !fillAttempted.current.has(d.id),
+    );
+    if (empty.length === 0) return;
+
+    let cancelled = false;
+    const run = async () => {
+      for (const dish of empty) {
+        if (cancelled) return;
+        fillAttempted.current.add(dish.id);
+        setFilling((prev) => ({ ...prev, [dish.id]: true }));
+        try {
+          const { trip: next } = await api.fillDish(id, dish.id);
+          if (!cancelled) setTrip(next);
+        } catch (err) {
+          if (!cancelled) setActionError((err as Error).message);
+        } finally {
+          if (!cancelled) {
+            setFilling((prev) => {
+              const copy = { ...prev };
+              delete copy[dish.id];
+              return copy;
+            });
+          }
+        }
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [trip, id, setTrip]);
 
   const onTap = async (ing: Ingredient) => {
     if (!user) return;
@@ -113,14 +151,16 @@ export function TripPage() {
             <div className="dish-head">
               <span className="dish-head-icon">{dish.icon}</span>
               <strong className="dish-head-name">{dish.name}</strong>
-              {dish.ingredients.length === 0 && (
+              {(dish.ingredients.length === 0 || filling[dish.id]) && (
                 <span className="muted" style={{ fontSize: '0.85rem' }}>
-                  ✨
+                  {filling[dish.id] ? '⏳' : '✨'}
                 </span>
               )}
             </div>
             {dish.ingredients.length === 0 ? (
-              <p className="muted empty-ings">no items — use ✨ then ✅</p>
+              <p className="muted empty-ings">
+                {filling[dish.id] ? '✨ filling buy list…' : '✨ waiting…'}
+              </p>
             ) : (
               <ul className="shop-list">
                 {dish.ingredients.map((ing) => {
@@ -179,9 +219,9 @@ export function TripPage() {
         ))}
       </div>
 
-      {trip.dishes.length > 0 && totalIngredients === 0 && (
+      {trip.dishes.length > 0 && totalIngredients === 0 && Object.keys(filling).length === 0 && (
         <p className="muted" style={{ textAlign: 'center', fontSize: '0.9rem' }}>
-          tap ✨ on add dish to fill the buy list
+          ✨ could not fill — check DeepSeek key
         </p>
       )}
 

@@ -68,6 +68,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  fillDish: (tripId: string, dishId: string) =>
+    request<{ trip: import('./types').Trip }>(`/api/trips/${tripId}/dishes/${dishId}/fill`, {
+      method: 'POST',
+      body: '{}',
+    }),
   claim: (id: string) =>
     request<{ trip: import('./types').Trip }>(`/api/ingredients/${id}/claim`, {
       method: 'POST',

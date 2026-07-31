@@ -17,6 +17,7 @@ import {
   generateInviteCode,
   isMember,
   newDish,
+  newIngredient,
 } from '../tripHelpers.js';
 import { displayName, type Trip } from '../types.js';
 
@@ -159,13 +160,13 @@ tripsRouter.post('/:id/dishes', requireAuth, async (req: AuthedRequest, res, nex
       return;
     }
     const name = String(req.body?.name ?? '').trim();
-    const icon = String(req.body?.icon ?? '🍽️');
+    let icon = String(req.body?.icon ?? '🍽️');
     const ingredientsIn = Array.isArray(req.body?.ingredients) ? req.body.ingredients : [];
     if (!name) {
       res.status(400).json({ error: 'name required' });
       return;
     }
-    const ingredients = ingredientsIn
+    let ingredients = ingredientsIn
       .map((i: { name?: string; icon?: string }) => ({
         name: String(i?.name ?? '').trim(),
         icon: String(i?.icon ?? '🛒'),
@@ -173,8 +174,23 @@ tripsRouter.post('/:id/dishes', requireAuth, async (req: AuthedRequest, res, nex
       .filter((i: { name: string }) => i.name);
 
     if (ingredients.length === 0) {
-      res.status(400).json({ error: 'at least one ingredient required' });
-      return;
+      if (!rateLimit(`gen:${req.user!.id}`, 10, 60_000)) {
+        res.status(429).json({ error: 'Too many generate requests' });
+        return;
+      }
+      try {
+        const draft = await generateBuyList(name);
+        if (draft.icon) icon = draft.icon;
+        ingredients = draft.ingredients;
+      } catch (err) {
+        console.error('DeepSeek auto-generate on create failed', err);
+        res.status(502).json({ error: 'Could not generate buy list' });
+        return;
+      }
+      if (ingredients.length === 0) {
+        res.status(502).json({ error: 'Could not generate buy list' });
+        return;
+      }
     }
 
     const dish = newDish(name, icon, req.user!.id, ingredients);
@@ -183,6 +199,53 @@ tripsRouter.post('/:id/dishes', requireAuth, async (req: AuthedRequest, res, nex
       return t;
     });
     res.status(201).json({ trip: await enrichTrip(updated!), dish });
+  } catch (err) {
+    next(err);
+  }
+});
+
+tripsRouter.post('/:id/dishes/:dishId/fill', requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const trip = await readTrip(req.params.id);
+    if (!requireMember(trip, req.user!.id)) {
+      res.status(404).json({ error: 'Trip not found' });
+      return;
+    }
+    const dish = trip.dishes.find((d) => d.id === req.params.dishId);
+    if (!dish) {
+      res.status(404).json({ error: 'Dish not found' });
+      return;
+    }
+    if (dish.ingredients.length > 0) {
+      res.json({ trip: await enrichTrip(trip), dish });
+      return;
+    }
+    if (!rateLimit(`gen:${req.user!.id}`, 10, 60_000)) {
+      res.status(429).json({ error: 'Too many generate requests' });
+      return;
+    }
+    let draft;
+    try {
+      draft = await generateBuyList(dish.name);
+    } catch (err) {
+      console.error('DeepSeek fill failed', err);
+      res.status(502).json({ error: 'Could not generate buy list' });
+      return;
+    }
+    if (!draft.ingredients.length) {
+      res.status(502).json({ error: 'Could not generate buy list' });
+      return;
+    }
+
+    const updated = await updateTrip(trip.id, (t) => {
+      const target = t.dishes.find((d) => d.id === req.params.dishId);
+      if (!target || target.ingredients.length > 0) return t;
+      if (draft.icon) target.icon = draft.icon;
+      target.ingredients = draft.ingredients.map((i) => newIngredient(i.name, i.icon));
+      return t;
+    });
+    const filled = updated?.dishes.find((d) => d.id === req.params.dishId);
+    res.json({ trip: await enrichTrip(updated!), dish: filled });
   } catch (err) {
     next(err);
   }
