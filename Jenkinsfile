@@ -164,11 +164,10 @@ pipeline {
             steps {
                 sh '''
                     set -euo pipefail
-                    API_PORT="${BUY_STUFFS_API_PORT:-7001}"
-                    HEALTH_HOST="${BUY_STUFFS_HEALTH_HOST:-127.0.0.1}"
-                    echo "Waiting for http://${HEALTH_HOST}:${API_PORT}/api/health ..."
+                    # Probe inside the compose network (Jenkins may not share host localhost).
+                    echo "Waiting for api /api/health via docker compose exec ..."
                     for i in $(seq 1 36); do
-                      if curl -sf "http://${HEALTH_HOST}:${API_PORT}/api/health" >/dev/null; then
+                      if docker compose exec -T api node -e "fetch('http://127.0.0.1:7001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
                         echo "API healthy"
                         exit 0
                       fi
