@@ -1,15 +1,15 @@
-# buy-stuffs — Jenkins-hosted production deploy
-#
-# Runtime: production runs on the same machine as Jenkins via `docker compose up -d`.
-# Jenkins-in-Docker: mount host Docker socket; set BUY_STUFFS_HEALTH_HOST=host.docker.internal
-#
-# Required:
-#   - docker + docker compose v2
-#   - Secret file credential `buy-stuffs-dotenv` OR env BUY_STUFFS_ENV_FILE
-#
-# Optional:
-#   - BUY_STUFFS_HEALTH_HOST (default 127.0.0.1)
-#   - SLACK_WEBHOOK_URL, TELEGRAM_BOT_TOKEN, JENKINS_TELEGRAM_CHAT_ID
+// buy-stuffs — Jenkins-hosted production deploy
+//
+// Runtime: production runs on the same machine as Jenkins via `docker compose up -d`.
+// Jenkins-in-Docker: mount host Docker socket; set BUY_STUFFS_HEALTH_HOST=host.docker.internal
+//
+// Required:
+//   - docker + docker compose v2
+//   - Secret file credential `buy-stuffs-dotenv` OR env BUY_STUFFS_ENV_FILE
+//
+// Optional:
+//   - BUY_STUFFS_HEALTH_HOST (default 127.0.0.1)
+//   - SLACK_WEBHOOK_URL, TELEGRAM_BOT_TOKEN, JENKINS_TELEGRAM_CHAT_ID
 
 pipeline {
     agent any
