@@ -225,4 +225,34 @@ export const api = {
       body: '{}',
       retries: 1,
     }),
+  updateDish: (tripId: string, dishId: string, payload: { name?: string; icon?: string }) =>
+    request<{ trip: import('./types').Trip }>(`/api/trips/${tripId}/dishes/${dishId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+      retries: 1,
+    }),
+  addIngredient: (
+    tripId: string,
+    dishId: string,
+    payload: { name: string; icon?: string },
+  ) =>
+    request<{ trip: import('./types').Trip }>(
+      `/api/trips/${tripId}/dishes/${dishId}/ingredients`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        retries: 1,
+      },
+    ),
+  updateIngredient: (id: string, payload: { name: string; icon?: string }) =>
+    request<{ trip: import('./types').Trip }>(`/api/ingredients/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+      retries: 1,
+    }),
+  deleteIngredient: (id: string) =>
+    request<{ trip: import('./types').Trip }>(`/api/ingredients/${id}`, {
+      method: 'DELETE',
+      retries: 1,
+    }),
 };

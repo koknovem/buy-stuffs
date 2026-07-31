@@ -7,9 +7,10 @@ import { useAuth } from '../auth';
 import { Avatar } from '../Avatar';
 import { useOnlineStatus } from '../useOnlineStatus';
 import { useTripPolling } from '../useTripPolling';
-import type { Ingredient, Trip } from '../types';
+import type { Dish, Ingredient, Trip } from '../types';
 
 const FILL_RETRY_MS = 4_000;
+const ING_ICONS = ['🛒', '🥚', '🧅', '🧄', '🥕', '🥦', '🍅', '🧀', '🥩', '🐟', '🦐', '🍚'];
 
 export function TripPage() {
   const { id } = useParams();
@@ -24,6 +25,13 @@ export function TripPage() {
   const [filling, setFilling] = useState<Record<string, boolean>>({});
   const [pendingIng, setPendingIng] = useState<string | null>(null);
   const [fillTick, setFillTick] = useState(0);
+  const [editDishId, setEditDishId] = useState<string | null>(null);
+  const [editIngId, setEditIngId] = useState<string | null>(null);
+  const [dishNameDraft, setDishNameDraft] = useState('');
+  const [ingNameDraft, setIngNameDraft] = useState('');
+  const [newIngName, setNewIngName] = useState('');
+  const [newIngIcon, setNewIngIcon] = useState('🛒');
+  const [editBusy, setEditBusy] = useState(false);
   const fillAttempted = useRef<Set<string>>(new Set());
   const fillFailAt = useRef<Map<string, number>>(new Map());
   const fillingRef = useRef<Set<string>>(new Set());
@@ -92,7 +100,7 @@ export function TripPage() {
   }, [trip, id, setTrip, online, fillTick]);
 
   const onTap = async (ing: Ingredient) => {
-    if (!user || pendingIng) return;
+    if (!user || pendingIng || editIngId === ing.id) return;
     if (!online) {
       setActionError('You’re offline. Try again when connected.');
       return;
@@ -172,6 +180,106 @@ export function TripPage() {
     fillFailAt.current.delete(dishId);
     setActionError(null);
     setFillTick((n) => n + 1);
+  };
+
+  const openDishEdit = (dish: Dish) => {
+    setEditIngId(null);
+    if (editDishId === dish.id) {
+      setEditDishId(null);
+      return;
+    }
+    setEditDishId(dish.id);
+    setDishNameDraft(dish.name);
+    setNewIngName('');
+    setNewIngIcon('🛒');
+  };
+
+  const openIngEdit = (ing: Ingredient) => {
+    setEditDishId(null);
+    if (editIngId === ing.id) {
+      setEditIngId(null);
+      return;
+    }
+    setEditIngId(ing.id);
+    setIngNameDraft(ing.name);
+  };
+
+  const saveDishName = async (dishId: string) => {
+    if (!id || !dishNameDraft.trim()) return;
+    if (!online) {
+      setActionError('You’re offline. Try again when connected.');
+      return;
+    }
+    setEditBusy(true);
+    setActionError(null);
+    try {
+      const { trip: next } = await api.updateDish(id, dishId, { name: dishNameDraft.trim() });
+      setTrip(next);
+      setEditDishId(null);
+    } catch (err) {
+      setActionError(friendlyError(err));
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
+  const addIngToDish = async (dishId: string) => {
+    if (!id || !newIngName.trim()) return;
+    if (!online) {
+      setActionError('You’re offline. Try again when connected.');
+      return;
+    }
+    setEditBusy(true);
+    setActionError(null);
+    try {
+      const { trip: next } = await api.addIngredient(id, dishId, {
+        name: newIngName.trim(),
+        icon: newIngIcon,
+      });
+      setTrip(next);
+      setNewIngName('');
+    } catch (err) {
+      setActionError(friendlyError(err));
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
+  const saveIngName = async (ingId: string) => {
+    if (!ingNameDraft.trim()) return;
+    if (!online) {
+      setActionError('You’re offline. Try again when connected.');
+      return;
+    }
+    setEditBusy(true);
+    setActionError(null);
+    try {
+      const { trip: next } = await api.updateIngredient(ingId, { name: ingNameDraft.trim() });
+      setTrip(next);
+      setEditIngId(null);
+    } catch (err) {
+      setActionError(friendlyError(err));
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
+  const deleteIng = async (ingId: string) => {
+    if (!online) {
+      setActionError('You’re offline. Try again when connected.');
+      return;
+    }
+    setEditBusy(true);
+    setActionError(null);
+    try {
+      const { trip: next } = await api.deleteIngredient(ingId);
+      setTrip(next);
+      setEditIngId(null);
+    } catch (err) {
+      setActionError(friendlyError(err));
+    } finally {
+      setEditBusy(false);
+    }
   };
 
   const onInviteCodeClick = async () => {
@@ -296,7 +404,69 @@ export function TripPage() {
                   {filling[dish.id] ? '⏳' : '✨'}
                 </span>
               )}
+              <button
+                type="button"
+                className="icon-btn sm"
+                title="edit dish"
+                disabled={!online || editBusy}
+                onClick={() => openDishEdit(dish)}
+              >
+                ✏️
+              </button>
             </div>
+
+            {editDishId === dish.id && (
+              <div className="edit-panel">
+                <input
+                  className="field"
+                  value={dishNameDraft}
+                  disabled={editBusy}
+                  onChange={(e) => setDishNameDraft(e.target.value)}
+                  placeholder="dish name"
+                />
+                <button
+                  type="button"
+                  className="action-btn primary wide"
+                  disabled={editBusy || !dishNameDraft.trim()}
+                  onClick={() => void saveDishName(dish.id)}
+                >
+                  ✅
+                </button>
+                <div className="row">
+                  <button
+                    type="button"
+                    className="emoji-pick"
+                    style={{ width: 52, flex: '0 0 auto' }}
+                    disabled={editBusy}
+                    onClick={() => {
+                      const i = ING_ICONS.indexOf(newIngIcon);
+                      setNewIngIcon(ING_ICONS[(i + 1) % ING_ICONS.length]);
+                    }}
+                  >
+                    {newIngIcon}
+                  </button>
+                  <input
+                    className="field"
+                    value={newIngName}
+                    disabled={editBusy}
+                    placeholder="＋ ingredient"
+                    onChange={(e) => setNewIngName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void addIngToDish(dish.id);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    disabled={editBusy || !newIngName.trim()}
+                    onClick={() => void addIngToDish(dish.id)}
+                  >
+                    ＋
+                  </button>
+                </div>
+              </div>
+            )}
+
             {dish.ingredients.length === 0 ? (
               filling[dish.id] ? (
                 <AiLoadingPanel
@@ -324,52 +494,93 @@ export function TripPage() {
                   const claimer = ing.claimedBy ? trip.userMap[ing.claimedBy] : null;
                   return (
                     <li key={ing.id}>
-                      <button
-                        type="button"
-                        className={`shop-item ${ing.status}${pendingIng === ing.id ? ' pending' : ''}`}
-                        disabled={pendingIng === ing.id}
-                        onClick={() => void onTap(ing)}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          void release(ing);
-                        }}
-                      >
-                        <span className="ing-icon">{ing.icon}</span>
-                        <div className="ing-meta">
-                          <div className="ing-name">{ing.name}</div>
-                        </div>
-                        {ing.status === 'bought' ? (
-                          <span style={{ fontSize: '1.4rem' }} title="tap to reset">
-                            ✔️
-                          </span>
-                        ) : claimer ? (
-                          <span className="row" style={{ gap: '0.35rem' }}>
-                            {ing.claimedBy === user?.id && ing.status === 'claimed' && (
-                              <span
-                                role="button"
-                                tabIndex={0}
-                                title="release"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void release(ing);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
+                      <div className="shop-row">
+                        <button
+                          type="button"
+                          className={`shop-item ${ing.status}${pendingIng === ing.id ? ' pending' : ''}`}
+                          disabled={pendingIng === ing.id || editIngId === ing.id}
+                          onClick={() => void onTap(ing)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            void release(ing);
+                          }}
+                        >
+                          <span className="ing-icon">{ing.icon}</span>
+                          <div className="ing-meta">
+                            <div className="ing-name">{ing.name}</div>
+                          </div>
+                          {ing.status === 'bought' ? (
+                            <span style={{ fontSize: '1.4rem' }} title="tap to reset">
+                              ✔️
+                            </span>
+                          ) : claimer ? (
+                            <span className="row" style={{ gap: '0.35rem' }}>
+                              {ing.claimedBy === user?.id && ing.status === 'claimed' && (
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  title="release"
+                                  onClick={(e) => {
                                     e.stopPropagation();
                                     void release(ing);
-                                  }
-                                }}
-                                style={{ fontSize: '1.1rem' }}
-                              >
-                                ↩️
-                              </span>
-                            )}
-                            <Avatar user={claimer} size="sm" />
-                          </span>
-                        ) : (
-                          <span style={{ width: 28 }} />
-                        )}
-                      </button>
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.stopPropagation();
+                                      void release(ing);
+                                    }
+                                  }}
+                                  style={{ fontSize: '1.1rem' }}
+                                >
+                                  ↩️
+                                </span>
+                              )}
+                              <Avatar user={claimer} size="sm" />
+                            </span>
+                          ) : (
+                            <span style={{ width: 28 }} />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn sm"
+                          title="edit ingredient"
+                          disabled={!online || editBusy}
+                          onClick={() => openIngEdit(ing)}
+                        >
+                          ✏️
+                        </button>
+                      </div>
+                      {editIngId === ing.id && (
+                        <div className="edit-panel">
+                          <input
+                            className="field"
+                            value={ingNameDraft}
+                            disabled={editBusy}
+                            onChange={(e) => setIngNameDraft(e.target.value)}
+                            placeholder="ingredient name"
+                          />
+                          <div className="row">
+                            <button
+                              type="button"
+                              className="action-btn primary wide"
+                              disabled={editBusy || !ingNameDraft.trim()}
+                              onClick={() => void saveIngName(ing.id)}
+                            >
+                              ✅
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="delete"
+                              disabled={editBusy}
+                              onClick={() => void deleteIng(ing.id)}
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </li>
                   );
                 })}

@@ -687,3 +687,33 @@ a {
     transform: translateY(-4px);
   }
 }
+
+.icon-btn.sm {
+  min-width: 40px;
+  min-height: 40px;
+  font-size: 1.05rem;
+  flex: 0 0 auto;
+}
+
+.shop-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.shop-row .shop-item {
+  width: 100%;
+}
+
+.edit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0.35rem 0 0.55rem;
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 246, 235, 0.12);
+  animation: rise 0.25s ease both;
+}

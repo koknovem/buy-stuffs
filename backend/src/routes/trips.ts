@@ -285,6 +285,67 @@ tripsRouter.post('/:id/dishes/:dishId/fill', requireAuth, async (req: AuthedRequ
   }
 });
 
+tripsRouter.patch('/:id/dishes/:dishId', requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const trip = await readTrip(req.params.id);
+    if (!requireMember(trip, req.user!.id)) {
+      res.status(404).json({ error: 'Trip not found' });
+      return;
+    }
+    const name = req.body?.name != null ? String(req.body.name).trim().slice(0, 80) : null;
+    const icon = req.body?.icon != null ? String(req.body.icon).trim().slice(0, 8) : null;
+    if (name !== null && !name) {
+      res.status(400).json({ error: 'name required' });
+      return;
+    }
+    const updated = await updateTrip(trip.id, (t) => {
+      const dish = t.dishes.find((d) => d.id === req.params.dishId);
+      if (!dish) return t;
+      if (name !== null) dish.name = name;
+      if (icon) dish.icon = icon;
+      return t;
+    });
+    if (!updated?.dishes.some((d) => d.id === req.params.dishId)) {
+      res.status(404).json({ error: 'Dish not found' });
+      return;
+    }
+    res.json({ trip: await enrichTrip(updated) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+tripsRouter.post('/:id/dishes/:dishId/ingredients', requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const trip = await readTrip(req.params.id);
+    if (!requireMember(trip, req.user!.id)) {
+      res.status(404).json({ error: 'Trip not found' });
+      return;
+    }
+    const name = String(req.body?.name ?? '').trim().slice(0, 80);
+    const icon = String(req.body?.icon ?? '🛒').trim().slice(0, 8) || '🛒';
+    if (!name) {
+      res.status(400).json({ error: 'name required' });
+      return;
+    }
+    let created: ReturnType<typeof newIngredient> | null = null;
+    const updated = await updateTrip(trip.id, (t) => {
+      const dish = t.dishes.find((d) => d.id === req.params.dishId);
+      if (!dish) return t;
+      created = newIngredient(name, icon);
+      dish.ingredients.push(created);
+      return t;
+    });
+    if (!created) {
+      res.status(404).json({ error: 'Dish not found' });
+      return;
+    }
+    res.status(201).json({ trip: await enrichTrip(updated!), ingredient: created });
+  } catch (err) {
+    next(err);
+  }
+});
+
 async function mutateIngredient(
   req: AuthedRequest,
   res: import('express').Response,
@@ -395,6 +456,61 @@ ingredientsRouter.post('/:id/bought', requireAuth, async (req: AuthedRequest, re
 ingredientsRouter.post('/:id/reset', requireAuth, async (req: AuthedRequest, res, next) => {
   try {
     await mutateIngredient(req, res, 'reset');
+  } catch (err) {
+    next(err);
+  }
+});
+ingredientsRouter.patch('/:id', requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const userId = req.user!.id;
+    const ingredientId = req.params.id;
+    const name = String(req.body?.name ?? '').trim().slice(0, 80);
+    const icon =
+      req.body?.icon != null ? String(req.body.icon).trim().slice(0, 8) : null;
+    if (!name) {
+      res.status(400).json({ error: 'name required' });
+      return;
+    }
+    const trips = await listTrips();
+    const trip = trips.find((t) => isMember(t, userId) && findIngredient(t, ingredientId));
+    if (!trip) {
+      res.status(404).json({ error: 'Ingredient not found' });
+      return;
+    }
+    const updated = await updateTrip(trip.id, (t) => {
+      const found = findIngredient(t, ingredientId);
+      if (!found) return t;
+      found.ingredient.name = name;
+      if (icon) found.ingredient.icon = icon;
+      return t;
+    });
+    res.json({ trip: await enrichTrip(updated!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+ingredientsRouter.delete('/:id', requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const userId = req.user!.id;
+    const ingredientId = req.params.id;
+    const trips = await listTrips();
+    const trip = trips.find((t) => isMember(t, userId) && findIngredient(t, ingredientId));
+    if (!trip) {
+      res.status(404).json({ error: 'Ingredient not found' });
+      return;
+    }
+    const updated = await updateTrip(trip.id, (t) => {
+      for (const dish of t.dishes) {
+        const idx = dish.ingredients.findIndex((i) => i.id === ingredientId);
+        if (idx >= 0) {
+          dish.ingredients.splice(idx, 1);
+          break;
+        }
+      }
+      return t;
+    });
+    res.json({ trip: await enrichTrip(updated!) });
   } catch (err) {
     next(err);
   }
