@@ -242,7 +242,7 @@ tripsRouter.post('/:id/dishes/:dishId/fill', requireAuth, async (req: AuthedRequ
       return;
     }
     if (!draft.ingredients.length) {
-      res.status(502).json({ error: 'Could not generate buy list' });
+      res.status(502).json({ error: 'Could not generate buy list', reason: 'Empty model response' });
       return;
     }
 
