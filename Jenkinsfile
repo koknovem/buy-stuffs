@@ -7,9 +7,8 @@
 //   - docker + docker compose v2
 //   - Secret file credential `buy-stuffs-dotenv` OR env BUY_STUFFS_ENV_FILE
 //
-// Optional:
-//   - BUY_STUFFS_HEALTH_HOST (default 127.0.0.1)
-//   - SLACK_WEBHOOK_URL, TELEGRAM_BOT_TOKEN, JENKINS_TELEGRAM_CHAT_ID
+// Optional Telegram: global env TELEGRAM_BOT_TOKEN_CREDENTIALS_ID + TELEGRAM_CHAT_ID_CREDENTIALS_ID
+// (values are Jenkins credential ids for Secret text). Also: BUY_STUFFS_HEALTH_HOST, SLACK_WEBHOOK_URL
 
 pipeline {
     agent any
