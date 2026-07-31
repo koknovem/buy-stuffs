@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
+import { AiLoadingPanel } from '../AiLoadingPanel';
 import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
 import { Avatar } from '../Avatar';
@@ -226,9 +227,14 @@ export function TripPage() {
               )}
             </div>
             {dish.ingredients.length === 0 ? (
-              <p className="muted empty-ings">
-                {filling[dish.id] ? '✨ filling buy list…' : '✨ waiting…'}
-              </p>
+              filling[dish.id] ? (
+                <AiLoadingPanel
+                  title={`AI 寫緊「${dish.name}」買餸清單`}
+                  detail="通常要幾秒，請稍等，唔好關閉頁面～"
+                />
+              ) : (
+                <p className="muted empty-ings">✨ 準備產生清單…</p>
+              )
             ) : (
               <ul className="shop-list">
                 {dish.ingredients.map((ing) => {

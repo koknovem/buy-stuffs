@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { AiLoadingPanel } from '../AiLoadingPanel';
 import { api } from '../api';
 import type { DraftIngredient } from '../types';
 
@@ -17,6 +18,8 @@ export function AddDishPage() {
   const [busy, setBusy] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const aiWorking = genBusy || (busy && ingredients.length === 0);
 
   const generate = async () => {
     if (!id || !name.trim()) return;
@@ -38,7 +41,6 @@ export function AddDishPage() {
     setBusy(true);
     setError(null);
     try {
-      // Empty ingredients → server calls DeepSeek and fills the buy list
       await api.addDish(id, { name: name.trim(), icon, ingredients });
       navigate(`/trip/${id}`, { replace: true });
     } catch (err) {
@@ -57,8 +59,17 @@ export function AddDishPage() {
 
   return (
     <div className="app-shell">
+      {aiWorking && (
+        <div className="ai-loading-overlay">
+          <AiLoadingPanel
+            title={genBusy ? 'AI 產生緊食材清單' : 'AI 寫緊買餸清單並儲存'}
+            detail="通常要幾秒，請稍等，唔好關閉頁面～"
+          />
+        </div>
+      )}
+
       <div className="topbar">
-        <button className="icon-btn" onClick={() => navigate(-1)}>
+        <button className="icon-btn" disabled={aiWorking} onClick={() => navigate(-1)}>
           ←
         </button>
         <span style={{ fontSize: '1.6rem' }}>{icon}</span>
@@ -76,6 +87,7 @@ export function AddDishPage() {
         className="field"
         placeholder="dish"
         value={name}
+        disabled={aiWorking}
         onChange={(e) => setName(e.target.value)}
       />
 
@@ -85,6 +97,7 @@ export function AddDishPage() {
             key={e}
             type="button"
             className={`emoji-pick ${icon === e ? 'active' : ''}`}
+            disabled={aiWorking}
             onClick={() => setIcon(e)}
           >
             {e}
@@ -98,6 +111,7 @@ export function AddDishPage() {
             key={`${ing.name}-${idx}`}
             type="button"
             className="draft-chip"
+            disabled={aiWorking}
             onClick={() => setIngredients((prev) => prev.filter((_, i) => i !== idx))}
           >
             <span>{ing.icon}</span>
@@ -107,9 +121,9 @@ export function AddDishPage() {
         ))}
       </div>
 
-      {ingredients.length === 0 && name.trim() && (
+      {ingredients.length === 0 && name.trim() && !aiWorking && (
         <p className="muted" style={{ textAlign: 'center', fontSize: '0.9rem' }}>
-          ✅ will ✨ fill the buy list
+          按 ✅ 會用 AI 自動寫買餸清單
         </p>
       )}
 
@@ -118,6 +132,7 @@ export function AddDishPage() {
           type="button"
           className="emoji-pick"
           style={{ width: 52, flex: '0 0 auto' }}
+          disabled={aiWorking}
           onClick={() => {
             const i = ING_EMOJIS.indexOf(manualIcon);
             setManualIcon(ING_EMOJIS[(i + 1) % ING_EMOJIS.length]);
@@ -129,12 +144,13 @@ export function AddDishPage() {
           className="field"
           placeholder="+"
           value={manualName}
+          disabled={aiWorking}
           onChange={(e) => setManualName(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') addManual();
           }}
         />
-        <button className="icon-btn" type="button" onClick={addManual}>
+        <button className="icon-btn" type="button" disabled={aiWorking} onClick={addManual}>
           ＋
         </button>
       </div>
@@ -144,7 +160,7 @@ export function AddDishPage() {
         disabled={busy || genBusy || !name.trim()}
         onClick={() => void save()}
       >
-        {busy && ingredients.length === 0 ? '✨' : '✅'}
+        {aiWorking ? '✨' : '✅'}
       </button>
 
       {error && <p className="error">{error}</p>}
