@@ -6,6 +6,7 @@ import { generateBuyList } from '../deepseek.js';
 import { rateLimit } from '../rateLimit.js';
 import {
   createTrip,
+  deleteTrip,
   findTripByCode,
   listTrips,
   readTrip,
@@ -119,6 +120,24 @@ tripsRouter.get('/:id', requireAuth, async (req: AuthedRequest, res, next) => {
       return;
     }
     res.json({ trip: await enrichTrip(trip) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+tripsRouter.delete('/:id', requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const trip = await readTrip(req.params.id);
+    if (!requireMember(trip, req.user!.id)) {
+      res.status(404).json({ error: 'Trip not found' });
+      return;
+    }
+    const ok = await deleteTrip(trip.id);
+    if (!ok) {
+      res.status(404).json({ error: 'Trip not found' });
+      return;
+    }
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

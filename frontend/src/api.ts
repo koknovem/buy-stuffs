@@ -163,6 +163,11 @@ export const api = {
       body: '{}',
       retries: 1,
     }),
+  deleteTrip: (tripId: string) =>
+    request<{ ok: boolean }>(`/api/trips/${tripId}`, {
+      method: 'DELETE',
+      retries: 1,
+    }),
   joinTrip: (code: string) =>
     request<{ trip: import('./types').Trip }>('/api/trips/join', {
       method: 'POST',

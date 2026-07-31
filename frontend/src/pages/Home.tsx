@@ -13,6 +13,7 @@ export function HomePage() {
   const wasOnline = useRef(online);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [busy, setBusy] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,6 +56,23 @@ export function HomePage() {
     }
   };
 
+  const removeTrip = async (tripId: string) => {
+    if (!online) {
+      setError('You’re offline. Try again when connected.');
+      return;
+    }
+    setDeletingId(tripId);
+    setError(null);
+    try {
+      await api.deleteTrip(tripId);
+      setTrips((prev) => prev.filter((t) => t.id !== tripId));
+    } catch (err) {
+      setError(friendlyError(err, 'Could not delete trip'));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="app-shell">
       <div className="topbar">
@@ -93,19 +111,37 @@ export function HomePage() {
 
       <div className="trip-tiles">
         {trips.map((t) => (
-          <button key={t.id} className="trip-tile" onClick={() => navigate(`/trip/${t.id}`)}>
-            <div>
-              <div className="chip-code" style={{ display: 'inline-block' }}>
-                {t.code}
+          <div key={t.id} className="trip-tile-row">
+            <button
+              type="button"
+              className="trip-tile"
+              onClick={() => navigate(`/trip/${t.id}`)}
+            >
+              <div>
+                <div className="chip-code" style={{ display: 'inline-block' }}>
+                  {t.code}
+                </div>
+                <div className="member-strip" style={{ marginTop: '0.5rem' }}>
+                  {t.members.map((m) => (
+                    <Avatar key={m.id} user={m} size="sm" />
+                  ))}
+                </div>
               </div>
-              <div className="member-strip" style={{ marginTop: '0.5rem' }}>
-                {t.members.map((m) => (
-                  <Avatar key={m.id} user={m} size="sm" />
-                ))}
-              </div>
-            </div>
-            <span style={{ fontSize: '1.5rem' }}>🛒</span>
-          </button>
+              <span style={{ fontSize: '1.5rem' }}>🛒</span>
+            </button>
+            <button
+              type="button"
+              className="icon-btn sm"
+              title="delete trip"
+              disabled={!online || deletingId === t.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                void removeTrip(t.id);
+              }}
+            >
+              {deletingId === t.id ? '⏳' : '🗑️'}
+            </button>
+          </div>
         ))}
       </div>
     </div>

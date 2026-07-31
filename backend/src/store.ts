@@ -140,6 +140,14 @@ export async function createTrip(trip: Trip): Promise<Trip> {
   });
 }
 
+export async function deleteTrip(tripId: string): Promise<boolean> {
+  return withLock(tripPath(tripId), async () => {
+    if (!(await exists(tripPath(tripId)))) return false;
+    await fs.unlink(tripPath(tripId));
+    return true;
+  });
+}
+
 export async function listTrips(): Promise<Trip[]> {
   await ensureDir(tripsDir());
   const files = await fs.readdir(tripsDir());

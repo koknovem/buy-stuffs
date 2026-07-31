@@ -476,6 +476,17 @@ a {
   gap: 0.75rem;
 }
 
+.trip-tile-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.trip-tile-row .trip-tile {
+  width: 100%;
+}
+
 .trip-tile {
   appearance: none;
   border: none;
