@@ -194,7 +194,7 @@ pipeline {
         failure {
             script {
                 notifySlack('danger', "buy-stuffs deploy FAILED — ${env.JOB_NAME} #${env.BUILD_NUMBER}")
-                notifyTelegram('❌', 'deploy FAILED', false, collectFailureDetail())
+                notifyTelegram('❌', 'deploy FAILED', false, "See ${env.BUILD_URL}console")
             }
             echo 'Deploy failed — see stage logs and `docker compose logs`.'
         }
@@ -229,17 +229,22 @@ def notifySlack(String color, String message) {
 }
 
 def notifyTelegram(String statusEmoji, String statusLabel, boolean inProgress = false, String errorDetail = null) {
-    def botToken = env.TELEGRAM_BOT_TOKEN?.trim()
-    def chatId = env.JENKINS_TELEGRAM_CHAT_ID?.trim() ?: env.ADMIN_TELEGRAM_CHAT_ID?.trim()
-    if (!botToken || !chatId) {
-        echo 'Telegram notify skipped — set TELEGRAM_BOT_TOKEN and JENKINS_TELEGRAM_CHAT_ID'
+    def tokenCredId = env.TELEGRAM_BOT_TOKEN_CREDENTIALS_ID?.trim()
+    def chatCredId = env.TELEGRAM_CHAT_ID_CREDENTIALS_ID?.trim()
+    if (!tokenCredId || !chatCredId) {
+        echo 'Telegram notify skipped — set global env TELEGRAM_BOT_TOKEN_CREDENTIALS_ID and TELEGRAM_CHAT_ID_CREDENTIALS_ID'
         return
     }
-    def duration = inProgress ? 'in progress' : (currentBuild.durationString ?: 'n/a')
-    def branch = env.GIT_BRANCH ?: env.BRANCH_NAME ?: 'unknown'
-    def commit = env.GIT_COMMIT?.take(7) ?: 'n/a'
-    def skipDeploy = params.SKIP_DEPLOY ? 'yes' : 'no'
-    def text = """${statusEmoji} buy-stuffs ${statusLabel}
+
+    withCredentials([
+        string(credentialsId: tokenCredId, variable: 'TELEGRAM_BOT_TOKEN'),
+        string(credentialsId: chatCredId, variable: 'TELEGRAM_CHAT_ID'),
+    ]) {
+        def duration = inProgress ? 'in progress' : (currentBuild.durationString ?: 'n/a')
+        def branch = env.GIT_BRANCH ?: env.BRANCH_NAME ?: 'unknown'
+        def commit = env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'n/a'
+        def skipDeploy = params.SKIP_DEPLOY ? 'yes' : 'no'
+        def text = """${statusEmoji} buy-stuffs ${statusLabel}
 
 Job: ${env.JOB_NAME} #${env.BUILD_NUMBER}
 Branch: ${branch}
@@ -247,48 +252,30 @@ Commit: ${commit}
 Duration: ${duration}
 SKIP_DEPLOY: ${skipDeploy}
 ${env.BUILD_URL}"""
-    if (errorDetail?.trim()) {
-        def snippet = errorDetail.trim()
-        if (snippet.length() > 1800) {
-            snippet = snippet.take(1797) + '...'
-        }
-        text += "\n\n--- error ---\n${snippet}"
-    }
-    def payload = groovy.json.JsonOutput.toJson([
-        chat_id: chatId,
-        text: text,
-        disable_web_page_preview: true,
-    ])
-    writeFile file: 'telegram-payload.json', text: payload
-    sh """
-        curl -sf -X POST \\
-          -H 'Content-Type: application/json' \\
-          -d @telegram-payload.json \\
-          'https://api.telegram.org/bot${botToken}/sendMessage' \\
-          || echo 'Telegram notify failed (build result unchanged)'
-    """
-}
-
-@NonCPS
-def collectFailureDetail() {
-    def parts = []
-    try {
-        def logLines = currentBuild.rawBuild.getLog(120)
-        if (logLines) {
-            def tail = logLines.size() > 25 ? logLines[-25..-1] : logLines
-            def interesting = tail.findAll { line ->
-                def l = line.toLowerCase()
-                l.contains('error') || l.contains('failed') || l.contains('exit code') ||
-                l.contains('health check') || l.contains('fatal:') || l.contains('timed out')
+        if (errorDetail?.trim()) {
+            def snippet = errorDetail.trim()
+            if (snippet.length() > 1800) {
+                snippet = snippet.take(1797) + '...'
             }
-            if (interesting) {
-                parts << interesting.join('\n')
-            } else {
-                parts << tail.join('\n')
-            }
+            text += "\n\n--- error ---\n${snippet}"
         }
-    } catch (ignored) {
-        parts << '(could not read build log)'
+        def payload = groovy.json.JsonOutput.toJson([
+            chat_id: env.TELEGRAM_CHAT_ID,
+            text: text,
+            disable_web_page_preview: true,
+        ])
+        writeFile file: 'telegram-payload.json', text: payload
+        sh '''
+            set +e
+            curl -sf -X POST \
+              -H 'Content-Type: application/json' \
+              -d @telegram-payload.json \
+              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
+            rc=$?
+            set -e
+            if [ "$rc" -ne 0 ]; then
+              echo "Telegram notify failed (build result unchanged)"
+            fi
+        '''
     }
-    return parts.findAll { it?.trim() }.join('\n\n') ?: 'See Jenkins build log for details.'
 }
