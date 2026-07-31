@@ -119,7 +119,29 @@ export function TripPage() {
                 {ing.status === 'bought' ? (
                   <span style={{ fontSize: '1.4rem' }}>✔️</span>
                 ) : claimer ? (
-                  <Avatar user={claimer} size="sm" />
+                  <span className="row" style={{ gap: '0.35rem' }}>
+                    {ing.claimedBy === user?.id && ing.status === 'claimed' && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        title="release"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void release(ing);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.stopPropagation();
+                            void release(ing);
+                          }
+                        }}
+                        style={{ fontSize: '1.1rem' }}
+                      >
+                        ↩️
+                      </span>
+                    )}
+                    <Avatar user={claimer} size="sm" />
+                  </span>
                 ) : (
                   <span style={{ width: 28 }} />
                 )}
