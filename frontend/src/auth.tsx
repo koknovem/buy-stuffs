@@ -6,12 +6,13 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { api, ApiError } from './api';
+import { api, ApiError, friendlyError, isNetworkError } from './api';
 import type { User } from './types';
 
 interface AuthState {
   user: User | null;
   loading: boolean;
+  authError: string | null;
   refresh: () => Promise<void>;
   setUser: (user: User | null) => void;
   logout: () => Promise<void>;
@@ -22,14 +23,25 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    setAuthError(null);
     try {
       const { user: me } = await api.me();
       setUser(me);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) setUser(null);
-      else setUser(null);
+      if (err instanceof ApiError && err.status === 401) {
+        setUser(null);
+        return;
+      }
+      if (isNetworkError(err)) {
+        // Keep existing session in memory; only fail hard if we never had a user.
+        setAuthError(friendlyError(err, 'Could not reach server'));
+        return;
+      }
+      setUser(null);
+      setAuthError(friendlyError(err, 'Could not verify session'));
     } finally {
       setLoading(false);
     }
@@ -49,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, refresh, setUser, logout }}>
+    <AuthContext.Provider value={{ user, loading, authError, refresh, setUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

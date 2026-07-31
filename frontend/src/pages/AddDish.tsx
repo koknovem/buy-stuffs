@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AiLoadingPanel } from '../AiLoadingPanel';
-import { api } from '../api';
+import { api, friendlyError } from '../api';
+import { useOnlineStatus } from '../useOnlineStatus';
 import type { DraftIngredient } from '../types';
 
 const DISH_EMOJIS = ['🍜', '🍝', '🍛', '🍲', '🥗', '🍣', '🍕', '🌮', '🥘', '🥩', '🐟', '🍗'];
@@ -10,6 +11,7 @@ const ING_EMOJIS = ['🥚', '🧅', '🧄', '🥕', '🥦', '🍅', '🧀', '�
 export function AddDishPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const online = useOnlineStatus();
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('🍜');
   const [ingredients, setIngredients] = useState<DraftIngredient[]>([]);
@@ -23,6 +25,10 @@ export function AddDishPage() {
 
   const generate = async () => {
     if (!id || !name.trim()) return;
+    if (!online) {
+      setError('You’re offline. Try again when connected.');
+      return;
+    }
     setGenBusy(true);
     setError(null);
     try {
@@ -30,7 +36,7 @@ export function AddDishPage() {
       if (draft.icon) setIcon(draft.icon);
       setIngredients(draft.ingredients);
     } catch (err) {
-      setError((err as Error).message);
+      setError(friendlyError(err, 'Could not generate ingredients'));
     } finally {
       setGenBusy(false);
     }
@@ -38,13 +44,17 @@ export function AddDishPage() {
 
   const save = async () => {
     if (!id || !name.trim()) return;
+    if (!online) {
+      setError('You’re offline. Try again when connected.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       await api.addDish(id, { name: name.trim(), icon, ingredients });
       navigate(`/trip/${id}`, { replace: true });
     } catch (err) {
-      setError((err as Error).message);
+      setError(friendlyError(err, 'Could not save dish'));
     } finally {
       setBusy(false);
     }
@@ -63,7 +73,7 @@ export function AddDishPage() {
         <div className="ai-loading-overlay">
           <AiLoadingPanel
             title={genBusy ? 'AI 產生緊食材清單' : 'AI 寫緊買餸清單並儲存'}
-            detail="通常要幾秒，請稍等，唔好關閉頁面～"
+            detail="通常要幾秒；網絡唔穩會自動再試，請唔好關閉頁面～"
           />
         </div>
       )}
@@ -75,7 +85,7 @@ export function AddDishPage() {
         <span style={{ fontSize: '1.6rem' }}>{icon}</span>
         <button
           className="icon-btn"
-          disabled={genBusy || busy || !name.trim()}
+          disabled={genBusy || busy || !name.trim() || !online}
           onClick={() => void generate()}
           title="generate"
         >
@@ -157,13 +167,25 @@ export function AddDishPage() {
 
       <button
         className="action-btn primary wide"
-        disabled={busy || genBusy || !name.trim()}
+        disabled={busy || genBusy || !name.trim() || !online}
         onClick={() => void save()}
       >
         {aiWorking ? '✨' : '✅'}
       </button>
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <div className="error-bar">
+          <p className="error">{error}</p>
+          <button
+            type="button"
+            className="text-btn"
+            disabled={!online || busy || genBusy}
+            onClick={() => void (ingredients.length ? save() : generate())}
+          >
+            Retry
+          </button>
+        </div>
+      )}
     </div>
   );
 }

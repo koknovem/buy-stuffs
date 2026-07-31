@@ -2,39 +2,58 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { AiLoadingPanel } from '../AiLoadingPanel';
-import { api, ApiError } from '../api';
+import { api, ApiError, friendlyError, isNetworkError } from '../api';
 import { useAuth } from '../auth';
 import { Avatar } from '../Avatar';
+import { useOnlineStatus } from '../useOnlineStatus';
 import { useTripPolling } from '../useTripPolling';
 import type { Ingredient, Trip } from '../types';
+
+const FILL_RETRY_MS = 4_000;
 
 export function TripPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { trip, setTrip, loading, error } = useTripPolling(id);
+  const online = useOnlineStatus();
+  const { trip, setTrip, loading, error, syncing, refresh } = useTripPolling(id);
   const [qr, setQr] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [filling, setFilling] = useState<Record<string, boolean>>({});
+  const [pendingIng, setPendingIng] = useState<string | null>(null);
+  const [fillTick, setFillTick] = useState(0);
   const fillAttempted = useRef<Set<string>>(new Set());
+  const fillFailAt = useRef<Map<string, number>>(new Map());
+  const fillingRef = useRef<Set<string>>(new Set());
 
-  const inviteLink = trip
-    ? `${window.location.origin}/join/${trip.code}`
-    : '';
+  const inviteLink = trip ? `${window.location.origin}/join/${trip.code}` : '';
 
   useEffect(() => {
     if (!inviteLink) return;
     void QRCode.toDataURL(inviteLink, { width: 220, margin: 1 }).then(setQr);
   }, [inviteLink]);
 
-  // Auto-fill dishes that have no ingredients via DeepSeek
   useEffect(() => {
-    if (!trip || !id) return;
-    const empty = trip.dishes.filter(
-      (d) => d.ingredients.length === 0 && !fillAttempted.current.has(d.id),
-    );
+    if (!online) return;
+    const fails = [...fillFailAt.current.values()];
+    if (fails.length === 0) return;
+    const wait = Math.max(0, Math.min(...fails.map((t) => t + FILL_RETRY_MS - Date.now())));
+    const timer = window.setTimeout(() => setFillTick((n) => n + 1), wait + 30);
+    return () => window.clearTimeout(timer);
+  }, [online, fillTick, actionError, trip]);
+
+  useEffect(() => {
+    if (!trip || !id || !online) return;
+    const now = Date.now();
+    const empty = trip.dishes.filter((d) => {
+      if (d.ingredients.length > 0) return false;
+      if (fillingRef.current.has(d.id)) return false;
+      if (!fillAttempted.current.has(d.id)) return true;
+      const failedAt = fillFailAt.current.get(d.id);
+      return failedAt != null && now - failedAt >= FILL_RETRY_MS;
+    });
     if (empty.length === 0) return;
 
     let cancelled = false;
@@ -42,13 +61,20 @@ export function TripPage() {
       for (const dish of empty) {
         if (cancelled) return;
         fillAttempted.current.add(dish.id);
+        fillFailAt.current.delete(dish.id);
+        fillingRef.current.add(dish.id);
         setFilling((prev) => ({ ...prev, [dish.id]: true }));
         try {
           const { trip: next } = await api.fillDish(id, dish.id);
           if (!cancelled) setTrip(next);
         } catch (err) {
-          if (!cancelled) setActionError((err as Error).message);
+          if (!cancelled) {
+            fillFailAt.current.set(dish.id, Date.now());
+            setActionError(friendlyError(err, 'Could not generate shopping list'));
+            setFillTick((n) => n + 1);
+          }
         } finally {
+          fillingRef.current.delete(dish.id);
           if (!cancelled) {
             setFilling((prev) => {
               const copy = { ...prev };
@@ -63,19 +89,24 @@ export function TripPage() {
     return () => {
       cancelled = true;
     };
-  }, [trip, id, setTrip]);
+  }, [trip, id, setTrip, online, fillTick]);
 
   const onTap = async (ing: Ingredient) => {
-    if (!user) return;
+    if (!user || pendingIng) return;
+    if (!online) {
+      setActionError('You’re offline. Try again when connected.');
+      return;
+    }
+    if (ing.status === 'claimed' && ing.claimedBy !== user.id) return;
+
     setActionError(null);
+    setPendingIng(ing.id);
     try {
       let next: { trip: Trip };
       if (ing.status === 'open') {
         next = await api.claim(ing.id);
       } else if (ing.status === 'claimed' && ing.claimedBy === user.id) {
         next = await api.bought(ing.id);
-      } else if (ing.status === 'claimed' && ing.claimedBy !== user.id) {
-        return;
       } else if (ing.status === 'bought') {
         next = await api.resetIngredient(ing.id);
       } else {
@@ -84,32 +115,63 @@ export function TripPage() {
       setTrip(next.trip);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409 && id) {
-        const fresh = await api.getTrip(id);
-        setTrip(fresh.trip);
+        try {
+          const fresh = await api.getTrip(id);
+          setTrip(fresh.trip);
+        } catch {
+          /* ignore */
+        }
+      } else if (isNetworkError(err) && id) {
+        try {
+          await refresh();
+        } catch {
+          /* ignore */
+        }
       }
-      setActionError((err as Error).message);
+      setActionError(friendlyError(err));
+    } finally {
+      setPendingIng(null);
     }
   };
 
   const resetAll = async () => {
     if (!id || !trip) return;
+    if (!online) {
+      setActionError('You’re offline. Try again when connected.');
+      return;
+    }
     setActionError(null);
     try {
       const { trip: next } = await api.resetTrip(id);
       setTrip(next);
     } catch (err) {
-      setActionError((err as Error).message);
+      setActionError(friendlyError(err));
     }
   };
 
   const release = async (ing: Ingredient) => {
     if (!user || ing.claimedBy !== user.id || ing.status !== 'claimed') return;
+    if (!online) {
+      setActionError('You’re offline. Try again when connected.');
+      return;
+    }
+    setPendingIng(ing.id);
     try {
       const next = await api.release(ing.id);
       setTrip(next.trip);
+      setActionError(null);
     } catch (err) {
-      setActionError((err as Error).message);
+      setActionError(friendlyError(err));
+    } finally {
+      setPendingIng(null);
     }
+  };
+
+  const retryFill = (dishId: string) => {
+    fillAttempted.current.delete(dishId);
+    fillFailAt.current.delete(dishId);
+    setActionError(null);
+    setFillTick((n) => n + 1);
   };
 
   const onInviteCodeClick = async () => {
@@ -120,7 +182,6 @@ export function TripPage() {
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1600);
       } catch {
-        // Fallback for older mobile browsers
         const ta = document.createElement('textarea');
         ta.value = link;
         ta.style.position = 'fixed';
@@ -143,6 +204,9 @@ export function TripPage() {
     return (
       <div className="app-shell">
         <div className="spinner" />
+        <p className="muted" style={{ textAlign: 'center' }}>
+          Loading trip…
+        </p>
       </div>
     );
   }
@@ -150,6 +214,9 @@ export function TripPage() {
     return (
       <div className="app-shell">
         <p className="error">{error || 'Not found'}</p>
+        <button className="action-btn primary wide" type="button" onClick={() => void refresh()}>
+          Retry
+        </button>
         <button className="action-btn" onClick={() => navigate('/')}>
           🏠
         </button>
@@ -164,6 +231,9 @@ export function TripPage() {
   const allBought =
     totalIngredients > 0 &&
     trip.dishes.every((d) => d.ingredients.every((i) => i.status === 'bought'));
+  const hasFailedFill = trip.dishes.some(
+    (d) => d.ingredients.length === 0 && !filling[d.id] && fillFailAt.current.has(d.id),
+  );
 
   return (
     <div className="app-shell">
@@ -180,6 +250,7 @@ export function TripPage() {
           {copied ? '📋' : trip.code}
         </button>
         <div className="row" style={{ gap: '0.35rem' }}>
+          {syncing && <span className="sync-dot" title="syncing" aria-label="syncing" />}
           {hasProgress && (
             <button
               className="icon-btn"
@@ -230,8 +301,20 @@ export function TripPage() {
               filling[dish.id] ? (
                 <AiLoadingPanel
                   title={`AI 寫緊「${dish.name}」買餸清單`}
-                  detail="通常要幾秒，請稍等，唔好關閉頁面～"
+                  detail="通常要幾秒，網絡唔穩都會自動再試～"
                 />
+              ) : fillFailAt.current.has(dish.id) ? (
+                <div className="fill-retry">
+                  <p className="muted empty-ings">未能產生清單</p>
+                  <button
+                    type="button"
+                    className="text-btn"
+                    disabled={!online}
+                    onClick={() => retryFill(dish.id)}
+                  >
+                    Retry
+                  </button>
+                </div>
               ) : (
                 <p className="muted empty-ings">✨ 準備產生清單…</p>
               )
@@ -243,7 +326,8 @@ export function TripPage() {
                     <li key={ing.id}>
                       <button
                         type="button"
-                        className={`shop-item ${ing.status}`}
+                        className={`shop-item ${ing.status}${pendingIng === ing.id ? ' pending' : ''}`}
+                        disabled={pendingIng === ing.id}
                         onClick={() => void onTap(ing)}
                         onContextMenu={(e) => {
                           e.preventDefault();
@@ -301,13 +385,20 @@ export function TripPage() {
         </button>
       )}
 
-      {trip.dishes.length > 0 && totalIngredients === 0 && Object.keys(filling).length === 0 && (
+      {hasFailedFill && online && (
         <p className="muted" style={{ textAlign: 'center', fontSize: '0.9rem' }}>
-          ✨ could not fill — check DeepSeek key
+          Auto-retrying shopping lists…
         </p>
       )}
 
-      {(actionError || error) && <p className="error">{actionError || error}</p>}
+      {(actionError || error) && (
+        <div className="error-bar">
+          <p className="error">{actionError || error}</p>
+          <button type="button" className="text-btn" onClick={() => void refresh()}>
+            Refresh
+          </button>
+        </div>
+      )}
     </div>
   );
 }

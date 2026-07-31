@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import { api, friendlyError } from '../api';
 import { useAuth } from '../auth';
 import { GoogleSignIn } from '../GoogleSignIn';
 import { Avatar } from '../Avatar';
@@ -26,7 +26,7 @@ export function LoginPage() {
         setUser(user);
         navigate(user.needsNickname ? '/nickname' : '/', { replace: true });
       } catch (err) {
-        setError((err as Error).message);
+        setError(friendlyError(err, 'Sign-in failed'));
       } finally {
         setBusy(false);
       }
@@ -55,12 +55,17 @@ export function NicknamePage() {
   const [nickname, setNickname] = useState('');
   const [busy, setBusy] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+
   const save = async (value: string | null) => {
     setBusy(true);
+    setError(null);
     try {
       const { user: next } = await api.setNickname(value);
       setUser(next);
       navigate('/', { replace: true });
+    } catch (err) {
+      setError(friendlyError(err, 'Could not save nickname'));
     } finally {
       setBusy(false);
     }
@@ -98,6 +103,7 @@ export function NicknamePage() {
             ✅
           </button>
         </div>
+        {error && <p className="error">{error}</p>}
       </div>
     </div>
   );

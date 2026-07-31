@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api } from '../api';
+import { api, friendlyError } from '../api';
+import { useOnlineStatus } from '../useOnlineStatus';
 
 function extractCode(raw: string): string | null {
   const text = raw.trim().toUpperCase();
@@ -14,6 +15,7 @@ function extractCode(raw: string): string | null {
 export function JoinPage() {
   const { code: paramCode } = useParams();
   const navigate = useNavigate();
+  const online = useOnlineStatus();
   const [code, setCode] = useState(paramCode?.toUpperCase() ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -24,13 +26,17 @@ export function JoinPage() {
   const join = async (value: string) => {
     const normalized = extractCode(value) ?? value.trim().toUpperCase();
     if (!normalized) return;
+    if (!online) {
+      setError('You’re offline. Try again when connected.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const { trip } = await api.joinTrip(normalized);
       navigate(`/trip/${trip.id}`, { replace: true });
     } catch (err) {
-      setError((err as Error).message);
+      setError(friendlyError(err, 'Could not join trip'));
     } finally {
       setBusy(false);
     }
