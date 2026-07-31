@@ -88,4 +88,14 @@ export const api = {
       method: 'POST',
       body: '{}',
     }),
+  resetIngredient: (id: string) =>
+    request<{ trip: import('./types').Trip }>(`/api/ingredients/${id}/reset`, {
+      method: 'POST',
+      body: '{}',
+    }),
+  resetTrip: (tripId: string) =>
+    request<{ trip: import('./types').Trip }>(`/api/trips/${tripId}/reset`, {
+      method: 'POST',
+      body: '{}',
+    }),
 };

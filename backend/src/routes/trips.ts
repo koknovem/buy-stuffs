@@ -124,6 +124,31 @@ tripsRouter.get('/:id', requireAuth, async (req: AuthedRequest, res, next) => {
   }
 });
 
+tripsRouter.post('/:id/reset', requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const trip = await readTrip(req.params.id);
+    if (!requireMember(trip, req.user!.id)) {
+      res.status(404).json({ error: 'Trip not found' });
+      return;
+    }
+    const updated = await updateTrip(trip.id, (t) => {
+      for (const dish of t.dishes) {
+        for (const ingredient of dish.ingredients) {
+          ingredient.status = 'open';
+          ingredient.claimedBy = null;
+          ingredient.claimedAt = null;
+          ingredient.boughtBy = null;
+          ingredient.boughtAt = null;
+        }
+      }
+      return t;
+    });
+    res.json({ trip: await enrichTrip(updated!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 tripsRouter.post('/:id/dishes/generate', requireAuth, async (req: AuthedRequest, res, next) => {
   try {
     const trip = await readTrip(req.params.id);
@@ -263,7 +288,7 @@ tripsRouter.post('/:id/dishes/:dishId/fill', requireAuth, async (req: AuthedRequ
 async function mutateIngredient(
   req: AuthedRequest,
   res: import('express').Response,
-  action: 'claim' | 'release' | 'bought',
+  action: 'claim' | 'release' | 'bought' | 'reset',
 ) {
   const ingredientId = req.params.id;
   const userId = req.user!.id;
@@ -313,6 +338,12 @@ async function mutateIngredient(
         ingredient.claimedBy = userId;
         ingredient.claimedAt = now;
       }
+    } else if (action === 'reset') {
+      ingredient.status = 'open';
+      ingredient.claimedBy = null;
+      ingredient.claimedAt = null;
+      ingredient.boughtBy = null;
+      ingredient.boughtAt = null;
     }
     return t;
   });
@@ -357,6 +388,14 @@ ingredientsRouter.post('/:id/bought', requireAuth, async (req: AuthedRequest, re
       res.status(409).json({ error: (err as Error).message });
       return;
     }
+    next(err);
+  }
+});
+
+ingredientsRouter.post('/:id/reset', requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    await mutateIngredient(req, res, 'reset');
+  } catch (err) {
     next(err);
   }
 });

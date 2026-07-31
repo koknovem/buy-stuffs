@@ -75,6 +75,8 @@ export function TripPage() {
         next = await api.bought(ing.id);
       } else if (ing.status === 'claimed' && ing.claimedBy !== user.id) {
         return;
+      } else if (ing.status === 'bought') {
+        next = await api.resetIngredient(ing.id);
       } else {
         return;
       }
@@ -84,6 +86,17 @@ export function TripPage() {
         const fresh = await api.getTrip(id);
         setTrip(fresh.trip);
       }
+      setActionError((err as Error).message);
+    }
+  };
+
+  const resetAll = async () => {
+    if (!id || !trip) return;
+    setActionError(null);
+    try {
+      const { trip: next } = await api.resetTrip(id);
+      setTrip(next);
+    } catch (err) {
       setActionError((err as Error).message);
     }
   };
@@ -144,6 +157,12 @@ export function TripPage() {
   }
 
   const totalIngredients = trip.dishes.reduce((n, d) => n + d.ingredients.length, 0);
+  const hasProgress = trip.dishes.some((d) =>
+    d.ingredients.some((i) => i.status !== 'open'),
+  );
+  const allBought =
+    totalIngredients > 0 &&
+    trip.dishes.every((d) => d.ingredients.every((i) => i.status === 'bought'));
 
   return (
     <div className="app-shell">
@@ -159,9 +178,21 @@ export function TripPage() {
         >
           {copied ? '📋' : trip.code}
         </button>
-        <Link className="icon-btn" to={`/trip/${trip.id}/add`}>
-          ＋
-        </Link>
+        <div className="row" style={{ gap: '0.35rem' }}>
+          {hasProgress && (
+            <button
+              className="icon-btn"
+              type="button"
+              title="reset all"
+              onClick={() => void resetAll()}
+            >
+              🔄
+            </button>
+          )}
+          <Link className="icon-btn" to={`/trip/${trip.id}/add`}>
+            ＋
+          </Link>
+        </div>
       </div>
 
       <div className="member-strip">
@@ -218,7 +249,9 @@ export function TripPage() {
                           <div className="ing-name">{ing.name}</div>
                         </div>
                         {ing.status === 'bought' ? (
-                          <span style={{ fontSize: '1.4rem' }}>✔️</span>
+                          <span style={{ fontSize: '1.4rem' }} title="tap to reset">
+                            ✔️
+                          </span>
                         ) : claimer ? (
                           <span className="row" style={{ gap: '0.35rem' }}>
                             {ing.claimedBy === user?.id && ing.status === 'claimed' && (
@@ -255,6 +288,12 @@ export function TripPage() {
           </section>
         ))}
       </div>
+
+      {allBought && (
+        <button className="action-btn primary wide" type="button" onClick={() => void resetAll()}>
+          🔄
+        </button>
+      )}
 
       {trip.dishes.length > 0 && totalIngredients === 0 && Object.keys(filling).length === 0 && (
         <p className="muted" style={{ textAlign: 'center', fontSize: '0.9rem' }}>
