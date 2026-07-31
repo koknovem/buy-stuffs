@@ -1,0 +1,29 @@
+services:
+  api:
+    build: ./backend
+    container_name: buy-stuffs-api
+    ports:
+      - "7001:7001"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      PORT: "7001"
+      DATA_DIR: /app/data
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://buy.brian-li.com}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-https://buy.brian-li.com}
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-609978039700-l77di8avqomg63jss0hbsdp1ssg1114a.apps.googleusercontent.com}
+    container_name: buy-stuffs-web
+    ports:
+      - "7000:80"
+    depends_on:
+      - api
+    restart: unless-stopped

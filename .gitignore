@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+.env
+data/*
+!data/.gitkeep
+*.log
+.DS_Store
+coverage/
+.vite/
+.jenkins_build_*
