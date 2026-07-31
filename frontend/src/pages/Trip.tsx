@@ -15,6 +15,7 @@ export function TripPage() {
   const [qr, setQr] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [filling, setFilling] = useState<Record<string, boolean>>({});
   const fillAttempted = useRef<Set<string>>(new Set());
 
@@ -93,6 +94,33 @@ export function TripPage() {
     }
   };
 
+  const onInviteCodeClick = async () => {
+    const link = trip?.joinUrl;
+    if (link) {
+      try {
+        await navigator.clipboard.writeText(link);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1600);
+      } catch {
+        // Fallback for older mobile browsers
+        const ta = document.createElement('textarea');
+        ta.value = link;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1600);
+        } finally {
+          document.body.removeChild(ta);
+        }
+      }
+    }
+    setShowQr((v) => !v);
+  };
+
   if (loading && !trip) {
     return (
       <div className="app-shell">
@@ -119,8 +147,13 @@ export function TripPage() {
         <button className="icon-btn" onClick={() => navigate('/')}>
           ←
         </button>
-        <button className="chip-code" onClick={() => setShowQr((v) => !v)}>
-          {trip.code}
+        <button
+          className="chip-code"
+          type="button"
+          title="copy invite link"
+          onClick={() => void onInviteCodeClick()}
+        >
+          {copied ? '📋' : trip.code}
         </button>
         <Link className="icon-btn" to={`/trip/${trip.id}/add`}>
           ＋
