@@ -17,7 +17,8 @@ Production host: `https://buy.brian-li.com` → reverse proxy to port **7000** (
 ```bash
 cp .env.example .env
 # fill GOOGLE_CLIENT_SECRET, SESSION_SECRET, DEEPSEEK_API_KEY
-# for local: COOKIE_SECURE=false, CORS_ORIGIN=http://localhost:7000, PUBLIC_APP_URL=http://localhost:7000
+# Production: COOKIE_SECURE=true, CORS_ORIGIN=https://buy.brian-li.com, PUBLIC_APP_URL=https://buy.brian-li.com
+# Local: COOKIE_SECURE=false, CORS_ORIGIN=http://localhost:7000, PUBLIC_APP_URL=http://localhost:7000
 
 cd backend && npm install && npm run dev
 cd frontend && npm install && npm run dev

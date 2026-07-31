@@ -21,7 +21,7 @@ export const config = {
     '609978039700-l77di8avqomg63jss0hbsdp1ssg1114a.apps.googleusercontent.com',
   ),
   googleClientSecret: env('GOOGLE_CLIENT_SECRET'),
-  publicAppUrl: env('PUBLIC_APP_URL', 'http://localhost:7000').replace(/\/$/, ''),
+  publicAppUrl: env('PUBLIC_APP_URL', 'https://buy.brian-li.com').replace(/\/$/, ''),
   deepseekApiKey: env('DEEPSEEK_API_KEY'),
   deepseekBaseUrl: env('DEEPSEEK_BASE_URL', 'https://api.deepseek.com').replace(/\/$/, ''),
   deepseekModel: env('DEEPSEEK_MODEL', 'deepseek-v4-flash'),

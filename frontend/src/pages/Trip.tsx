@@ -19,10 +19,14 @@ export function TripPage() {
   const [filling, setFilling] = useState<Record<string, boolean>>({});
   const fillAttempted = useRef<Set<string>>(new Set());
 
+  const inviteLink = trip
+    ? `${window.location.origin}/join/${trip.code}`
+    : '';
+
   useEffect(() => {
-    if (!trip?.joinUrl) return;
-    void QRCode.toDataURL(trip.joinUrl, { width: 220, margin: 1 }).then(setQr);
-  }, [trip?.joinUrl]);
+    if (!inviteLink) return;
+    void QRCode.toDataURL(inviteLink, { width: 220, margin: 1 }).then(setQr);
+  }, [inviteLink]);
 
   // Auto-fill dishes that have no ingredients via DeepSeek
   useEffect(() => {
@@ -95,7 +99,7 @@ export function TripPage() {
   };
 
   const onInviteCodeClick = async () => {
-    const link = trip?.joinUrl;
+    const link = inviteLink;
     if (link) {
       try {
         await navigator.clipboard.writeText(link);
